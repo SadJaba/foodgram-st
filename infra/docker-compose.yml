@@ -1,11 +1,53 @@
 version: '3.3'
 services:
+  db:
+    image: postgres:13.0-alpine
+    container_name: foodgram-db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data/
+    environment:
+      POSTGRES_DB: foodgram_db
+      POSTGRES_USER: foodgram_user
+      POSTGRES_PASSWORD: foodgram_password
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U foodgram_user -d foodgram_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: ../backend
+    container_name: foodgram-backend
+    volumes:
+      - ../backend:/app
+      - static_volume:/app/static
+      - media_volume:/app/media
+    env_file:
+      - ./.env
+    environment:
+      POSTGRES_DB: foodgram_db
+      POSTGRES_USER: foodgram_user
+      POSTGRES_PASSWORD: foodgram_password
+      DB_HOST: db
+      DB_PORT: 5432
+    depends_on:
+      db:
+        condition: service_healthy
+    command: >
+      sh -c "python manage.py makemigrations api --noinput &&\
+             python manage.py migrate --noinput &&\
+             python manage.py collectstatic --noinput &&\
+             python manage.py createsuperuser --noinput || true &&\
+             gunicorn config.wsgi:application --bind 0.0.0.0:8000"
 
   frontend:
     container_name: foodgram-front
     build: ../frontend
     volumes:
       - ../frontend/:/app/result_build/
+    depends_on:
+      - backend
+
   nginx:
     container_name: foodgram-proxy
     image: nginx:1.25.4-alpine
@@ -15,3 +57,13 @@ services:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf
       - ../frontend/build:/usr/share/nginx/html/
       - ../docs/:/usr/share/nginx/html/api/docs/
+      - static_volume:/usr/share/nginx/html/static/
+      - media_volume:/usr/share/nginx/html/media/
+    depends_on:
+      - backend
+      - frontend
+
+volumes:
+  postgres_data:
+  static_volume:
+  media_volume:
