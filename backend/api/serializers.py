@@ -119,9 +119,13 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
     ingredients = serializers.ListField(
         child=serializers.DictField(
             child=serializers.IntegerField()
-        )
+        ),
+        required=True
     )
-    image = Base64ImageField()
+    image = Base64ImageField(required=True)
+    name = serializers.CharField(required=True)
+    text = serializers.CharField(required=True)
+    cooking_time = serializers.IntegerField(required=True)
 
     class Meta:
         model = Recipe
@@ -129,6 +133,44 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
             'ingredients', 'image',
             'name', 'text', 'cooking_time'
         )
+
+    def validate_ingredients(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                'Список ингредиентов не может быть пустым'
+            )
+        ingredients_ids = [item.get('id') for item in value]
+        if len(ingredients_ids) != len(set(ingredients_ids)):
+            raise serializers.ValidationError(
+                'Ингредиенты не должны повторяться'
+            )
+        for item in value:
+            if not item.get('id'):
+                raise serializers.ValidationError(
+                    'У каждого ингредиента должен быть указан id'
+                )
+            if not item.get('amount'):
+                raise serializers.ValidationError(
+                    'У каждого ингредиента должно быть указано количество'
+                )
+            if int(item.get('amount')) <= 0:
+                raise serializers.ValidationError(
+                    'Количество ингредиента должно быть больше 0'
+                )
+            try:
+                Ingredient.objects.get(id=item.get('id'))
+            except Ingredient.DoesNotExist:
+                raise serializers.ValidationError(
+                    f'Ингредиент с id {item.get("id")} не найден'
+                )
+        return value
+
+    def validate_cooking_time(self, value):
+        if value <= 0:
+            raise serializers.ValidationError(
+                'Время приготовления должно быть больше 0'
+            )
+        return value
 
     def create(self, validated_data):
         ingredients_data = validated_data.pop('ingredients')
@@ -145,17 +187,12 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
 
     def _create_ingredients(self, recipe, ingredients_data):
         for ingredient_data in ingredients_data:
-            try:
-                ingredient = Ingredient.objects.get(id=ingredient_data.get('id'))
-                IngredientAmount.objects.create(
-                    recipe=recipe,
-                    ingredient=ingredient,
-                    amount=ingredient_data.get('amount')
-                )
-            except Ingredient.DoesNotExist:
-                raise serializers.ValidationError(
-                    {'ingredients': f'Ингредиент с id {ingredient_data.get("id")} не найден'}
-                )
+            ingredient = Ingredient.objects.get(id=ingredient_data.get('id'))
+            IngredientAmount.objects.create(
+                recipe=recipe,
+                ingredient=ingredient,
+                amount=ingredient_data.get('amount')
+            )
 
     def to_representation(self, instance):
         return RecipeSerializer(instance, context=self.context).data
