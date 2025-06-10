@@ -85,43 +85,11 @@ docker-compose exec backend python manage.py createsuperuser
 docker-compose exec backend python manage.py collectstatic --no-input
 ```
 
-## API Endpoints
-
-### Аутентификация
-- POST /api/users/ - регистрация нового пользователя
-- POST /api/auth/token/login/ - получение токена
-- POST /api/auth/token/logout/ - выход из системы
-
-### Пользователи
-- GET /api/users/ - список пользователей
-- GET /api/users/{id}/ - информация о пользователе
-- GET /api/users/me/ - информация о текущем пользователе
-- PATCH /api/users/me/ - изменение данных пользователя
-- POST /api/users/set_password/ - изменение пароля
-
-### Рецепты
-- GET /api/recipes/ - список рецептов
-- POST /api/recipes/ - создание рецепта
-- GET /api/recipes/{id}/ - информация о рецепте
-- PATCH /api/recipes/{id}/ - изменение рецепта
-- DELETE /api/recipes/{id}/ - удаление рецепта
-
-### Подписки
-- GET /api/users/subscriptions/ - список подписок
-- POST /api/users/{id}/subscribe/ - подписка на пользователя
-- DELETE /api/users/{id}/subscribe/ - отписка от пользователя
-
-### Избранное
-- GET /api/recipes/favorite/ - список избранных рецептов
-- POST /api/recipes/{id}/favorite/ - добавление в избранное
-- DELETE /api/recipes/{id}/favorite/ - удаление из избранного
-
-### Список покупок
-- GET /api/recipes/download_shopping_cart/ - скачать список покупок
-- POST /api/recipes/{id}/shopping_cart/ - добавление в список покупок
-- DELETE /api/recipes/{id}/shopping_cart/ - удаление из списка покупок
-
 ## Автор
 
 Ваше имя - [GitHub](https://github.com/your-username)
 
+
+
+##Пс
+У меня проходит 121/198 тестов успешно, я пытался исправить оставшиеся 77, но у меня не получилось
