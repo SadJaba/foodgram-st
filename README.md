@@ -18,8 +18,8 @@
 
 1. Клонируйте репозиторий:
 ```bash
-git clone https://github.com/your-username/foodgram.git
-cd foodgram
+git clone https://github.com/SadJaba/foodgram-st.git
+cd foodgram-st
 ```
 
 2. Создайте и активируйте виртуальное окружение:
@@ -87,9 +87,7 @@ docker-compose exec backend python manage.py collectstatic --no-input
 
 ## Автор
 
-Ваше имя - [GitHub](https://github.com/your-username)
+[SadJaba](https://github.com/SadJaba) - [foodgram-st](https://github.com/SadJaba/foodgram-st)
 
-
-
-##Пс
+## Пс
 У меня проходит 121/198 тестов успешно, я пытался исправить оставшиеся 77, но у меня не получилось
