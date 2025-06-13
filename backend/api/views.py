@@ -25,12 +25,15 @@ from .serializers import (
     RecipeGetShortLinkSerializer
 )
 from .filters import RecipeFilter
+from .pagination import CustomPageNumberPagination
 
 User = get_user_model()
 
 
 class CustomUserViewSet(UserViewSet):
     """Представление для работы с пользователями."""
+    pagination_class = CustomPageNumberPagination
+
     @action(
         detail=False,
         methods=['get'],
@@ -52,10 +55,7 @@ class CustomUserViewSet(UserViewSet):
         serializer.is_valid(raise_exception=True)
         user = request.user
         if not user.check_password(serializer.data['current_password']):
-            return Response(
-                {'detail': 'Неверный пароль'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            raise ValidationError({'detail': 'Неверный пароль'})
         user.set_password(serializer.data['new_password'])
         user.save()
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -87,45 +87,22 @@ class CustomUserViewSet(UserViewSet):
     )
     def subscribe(self, request, id=None):
         """Подписка/отписка на пользователя."""
+        author = get_object_or_404(User, id=id)
         user = request.user
-        try:
-            author = User.objects.get(id=id)
-        except User.DoesNotExist:
-            return Response(
-                {'detail': 'Пользователь не найден'},
-                status=status.HTTP_404_NOT_FOUND
-            )
-
         if request.method == 'POST':
             if user == author:
-                return Response(
-                    {'detail': 'Нельзя подписаться на самого себя'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            if Subscription.objects.filter(
-                user=user, author=author
-            ).exists():
-                return Response(
-                    {'detail': 'Вы уже подписаны на этого пользователя'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            subscription = Subscription.objects.create(user=user, author=author)
-            serializer = SubscriptionSerializer(
-                author, context={'request': request}
-            )
+                raise ValidationError({'detail': 'Нельзя подписаться на самого себя'})
+            if Subscription.objects.filter(user=user, author=author).exists():
+                raise ValidationError({'detail': 'Вы уже подписаны на этого пользователя'})
+            Subscription.objects.create(user=user, author=author)
+            serializer = SubscriptionSerializer(author, context={'request': request})
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-        if request.method == 'DELETE':
-            subscription = Subscription.objects.filter(
-                user=user, author=author
-            )
-            if not subscription.exists():
-                return Response(
-                    {'detail': 'Вы не подписаны на этого пользователя'},
-                    status=status.HTTP_400_BAD_REQUEST
-                )
-            subscription.delete()
-            return Response(status=status.HTTP_204_NO_CONTENT)
+        # DELETE
+        subscription = Subscription.objects.filter(user=user, author=author)
+        if not subscription.exists():
+            raise ValidationError({'detail': 'Вы не были подписаны на этого пользователя'})
+        subscription.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(
         detail=False,
@@ -174,6 +151,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
     queryset = Recipe.objects.all()
     permission_classes = [IsAuthenticatedOrReadOnly]
     filter_class = RecipeFilter
+    pagination_class = CustomPageNumberPagination
 
     def get_serializer_class(self):
         if self.request.method not in SAFE_METHODS:
@@ -212,9 +190,20 @@ class RecipeViewSet(viewsets.ModelViewSet):
     )
     def favorite(self, request, pk=None):
         """Добавление/удаление рецепта из избранного."""
-        if request.method == 'POST':
-            return self._add_to_list(request, pk, Favorite, 'избранном')
-        return self._remove_from_list(request, pk, Favorite, 'избранном')
+        try:
+            recipe = get_object_or_404(Recipe, id=pk)
+            if request.method == 'POST':
+                return self._add_to_list(
+                    request, recipe, Favorite, FavoriteSerializer, 'избранное'
+                )
+            return self._remove_from_list(
+                request, recipe, Favorite, 'избранного'
+            )
+        except ValueError:
+            return Response(
+                {'detail': 'Некорректный ID рецепта'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
     @action(
         detail=True,
@@ -223,26 +212,48 @@ class RecipeViewSet(viewsets.ModelViewSet):
     )
     def shopping_cart(self, request, pk=None):
         """Добавление/удаление рецепта из списка покупок."""
-        if request.method == 'POST':
-            return self._add_to_list(request, pk, ShoppingCart, 'списке покупок')
-        return self._remove_from_list(request, pk, ShoppingCart, 'списке покупок')
+        try:
+            recipe = get_object_or_404(Recipe, id=pk)
+            if request.method == 'POST':
+                return self._add_to_list(
+                    request, recipe, ShoppingCart, ShoppingCartSerializer,
+                    'список покупок'
+                )
+            return self._remove_from_list(
+                request, recipe, ShoppingCart, 'списка покупок'
+            )
+        except ValueError:
+            return Response(
+                {'detail': 'Некорректный ID рецепта'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-    def _add_to_list(self, request, pk, model, list_name):
+    def _add_to_list(self, request, recipe, model, serializer_class, list_name):
         """Добавление рецепта в список."""
-        recipe = get_object_or_404(Recipe, id=pk)
-        if model.objects.filter(user=request.user, recipe=recipe).exists():
-            raise ValidationError(f'Рецепт уже в {list_name}')
-        model.objects.create(user=request.user, recipe=recipe)
-        serializer = RecipeMinifiedSerializer(recipe)
+        data = {
+            'user': request.user.id,
+            'recipe': recipe.id
+        }
+        serializer = serializer_class(
+            data=data, context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
         return Response(serializer.data, status=status.HTTP_201_CREATED)
 
-    def _remove_from_list(self, request, pk, model, list_name):
+    def _remove_from_list(self, request, recipe, model, list_name):
         """Удаление рецепта из списка."""
-        recipe = get_object_or_404(Recipe, id=pk)
-        if not model.objects.filter(user=request.user, recipe=recipe).exists():
-            raise ValidationError(f'Рецепта нет в {list_name}')
-        model.objects.filter(user=request.user, recipe=recipe).delete()
-        return Response(status=status.HTTP_204_NO_CONTENT)
+        deleted_count, _ = model.objects.filter(
+            user=request.user, recipe=recipe
+        ).delete()
+
+        if deleted_count:
+            return Response(status=status.HTTP_204_NO_CONTENT)
+
+        return Response(
+            {'detail': f'Рецепт не был добавлен в {list_name}'},
+            status=status.HTTP_400_BAD_REQUEST
+        )
 
     @action(
         detail=False,
@@ -253,7 +264,7 @@ class RecipeViewSet(viewsets.ModelViewSet):
         """Скачивание списка покупок."""
         ingredients = self._get_ingredients_for_shopping_cart(request)
         if not ingredients.exists():
-            raise ValidationError('Список покупок пуст')
+            raise ValidationError({'detail': 'Список покупок пуст'})
         shopping_list_content = self._generate_shopping_list_content(ingredients)
         return self._create_file_response(shopping_list_content)
 
@@ -264,11 +275,13 @@ class RecipeViewSet(viewsets.ModelViewSet):
         ).values(
             'ingredient__name',
             'ingredient__measurement_unit'
-        ).annotate(amount=Sum('amount'))
+        ).annotate(
+            amount=Sum('amount')
+        ).order_by('ingredient__name')
 
     def _generate_shopping_list_content(self, ingredients):
         """Генерация содержимого списка покупок."""
-        shopping_list = ['Список покупок:\n\n']
+        shopping_list = ['Список покупок:\n']
         for ingredient in ingredients:
             name = ingredient['ingredient__name']
             unit = ingredient['ingredient__measurement_unit']
