@@ -29,6 +29,14 @@ class CustomUserCreateSerializer(UserCreateSerializer):
             'last_name': {'required': True}
         }
 
+    def validate_username(self, value):
+        import re
+        if not re.match(r'^[\w.@+-]+$', value):
+            raise serializers.ValidationError(
+                'Имя пользователя должно содержать только буквы, цифры и символы @/./+/-/_'
+            )
+        return value
+
     def create(self, validated_data):
         password = validated_data.pop('password')
         user = User.objects.create(**validated_data)
@@ -290,9 +298,16 @@ class SetAvatarResponseSerializer(serializers.ModelSerializer):
         fields = ('avatar',)
 
 
-class RecipeGetShortLinkSerializer(serializers.Serializer):
-    """Сериализатор получения короткой ссылки."""
-    short_link = serializers.URLField(source='short-link')
+class RecipeGetShortLinkSerializer(serializers.ModelSerializer):
+    """Сериализатор для получения короткой ссылки на рецепт."""
+    short_link = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Recipe
+        fields = ('short_link',)
+
+    def get_short_link(self, obj):
+        return f"http://foodgram.example.org/s/{obj.id}"
 
 
 class BaseUserRecipeSerializer(serializers.ModelSerializer):

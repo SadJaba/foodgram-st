@@ -11,6 +11,8 @@ from djoser.views import UserViewSet
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from io import BytesIO
+from django_filters.rest_framework import DjangoFilterBackend
+from rest_framework.filters import SearchFilter
 
 from .models import (
     Ingredient, Recipe, IngredientAmount,
@@ -22,7 +24,8 @@ from .serializers import (
     RecipeMinifiedSerializer, SetPasswordSerializer,
     TokenCreateSerializer, TokenGetResponseSerializer,
     SetAvatarSerializer, SetAvatarResponseSerializer,
-    RecipeGetShortLinkSerializer
+    RecipeGetShortLinkSerializer, FavoriteSerializer,
+    ShoppingCartSerializer
 )
 from .filters import RecipeFilter
 from .pagination import CustomPageNumberPagination
@@ -107,29 +110,45 @@ class CustomUserViewSet(UserViewSet):
     @action(
         detail=False,
         methods=['put'],
+        url_path='avatar',
         permission_classes=[IsAuthenticated]
     )
     def set_avatar(self, request):
         """Установка аватара."""
-        serializer = SetAvatarSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Требуется авторизация'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         user = request.user
-        if user.avatar:
-            user.avatar.delete()
-        user.avatar = serializer.validated_data['avatar']
-        user.save()
+        serializer = SetAvatarSerializer(data=request.data)
+        if serializer.is_valid():
+            if user.avatar:
+                user.avatar.delete()
+            user.avatar = serializer.validated_data['avatar']
+            user.save()
+            return Response(
+                SetAvatarResponseSerializer(user).data,
+                status=status.HTTP_200_OK
+            )
         return Response(
-            SetAvatarResponseSerializer(user).data,
-            status=status.HTTP_200_OK
+            serializer.errors,
+            status=status.HTTP_400_BAD_REQUEST
         )
 
     @action(
         detail=False,
         methods=['delete'],
+        url_path='avatar',
         permission_classes=[IsAuthenticated]
     )
     def delete_avatar(self, request):
         """Удаление аватара."""
+        if not request.user.is_authenticated:
+            return Response(
+                {'detail': 'Требуется авторизация'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         user = request.user
         if user.avatar:
             user.avatar.delete()
@@ -139,10 +158,12 @@ class CustomUserViewSet(UserViewSet):
 
 
 class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
-    """Представление для работы с ингредиентами."""
+    """Вьюсет для ингредиентов."""
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
-    pagination_class = None
+    permission_classes = (AllowAny,)
+    filter_backends = (DjangoFilterBackend,)
+    filterset_fields = ('name',)
     search_fields = ('^name',)
 
 
@@ -302,11 +323,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
     @action(
         detail=True,
         methods=['get'],
-        permission_classes=[IsAuthenticatedOrReadOnly]
+        permission_classes=[AllowAny]
     )
     def get_link(self, request, pk=None):
         """Получение короткой ссылки на рецепт."""
         recipe = get_object_or_404(Recipe, id=pk)
-        short_link = f"http://foodgram.example.org/s/{recipe.id}"
-        serializer = RecipeGetShortLinkSerializer({'short_link': short_link})
+        serializer = RecipeGetShortLinkSerializer(recipe)
         return Response(serializer.data)

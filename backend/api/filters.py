@@ -4,7 +4,7 @@ from .models import Recipe, Favorite, ShoppingCart
 class RecipeFilter(django_filters.FilterSet):
     is_favorited = django_filters.NumberFilter(method='get_is_favorited')
     is_in_shopping_cart = django_filters.NumberFilter(method='get_is_in_shopping_cart')
-    author = django_filters.NumberFilter(field_name='author__id')
+    author = django_filters.NumberFilter()
 
     class Meta:
         model = Recipe
