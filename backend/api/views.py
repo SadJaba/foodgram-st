@@ -162,9 +162,9 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = Ingredient.objects.all()
     serializer_class = IngredientSerializer
     permission_classes = (AllowAny,)
-    filter_backends = (DjangoFilterBackend,)
-    filterset_fields = ('name',)
+    filter_backends = (SearchFilter,)
     search_fields = ('^name',)
+    pagination_class = None  # Отключаем пагинацию для ингредиентов
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
@@ -323,7 +323,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
     @action(
         detail=True,
         methods=['get'],
-        permission_classes=[AllowAny]
+        permission_classes=[AllowAny],
+        url_path='get-link'
     )
     def get_link(self, request, pk=None):
         """Получение короткой ссылки на рецепт."""

@@ -205,39 +205,49 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
         return RecipeSerializer(instance, context=self.context).data
 
 
-class SubscriptionSerializer(CustomUserSerializer):
-    """Сериализатор подписки."""
+class RecipeMinifiedSerializer(serializers.ModelSerializer):
+    """Сериализатор для минифицированного представления рецепта."""
+    class Meta:
+        model = Recipe
+        fields = ('id', 'name', 'image', 'cooking_time')
+
+
+class SubscriptionSerializer(serializers.ModelSerializer):
+    """Сериализатор для подписок."""
     recipes = serializers.SerializerMethodField()
     recipes_count = serializers.SerializerMethodField()
-    avatar = serializers.ImageField(read_only=True)
+    is_subscribed = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = (
-            'email', 'id', 'username', 'first_name',
-            'last_name', 'is_subscribed', 'recipes',
-            'recipes_count', 'avatar'
+            'id', 'username', 'first_name', 'last_name',
+            'email', 'is_subscribed', 'recipes', 'recipes_count',
+            'avatar'
         )
 
     def get_recipes(self, obj):
+        """Получение рецептов пользователя."""
         request = self.context.get('request')
         recipes_limit = request.query_params.get('recipes_limit')
         recipes = obj.recipes.all()
         if recipes_limit:
             recipes = recipes[:int(recipes_limit)]
-        return RecipeSerializer(
-            recipes, many=True, context=self.context
-        ).data
+        return RecipeMinifiedSerializer(recipes, many=True).data
 
     def get_recipes_count(self, obj):
+        """Получение количества рецептов пользователя."""
         return obj.recipes.count()
 
-
-class RecipeMinifiedSerializer(serializers.ModelSerializer):
-    """Сериализатор минифицированного рецепта."""
-    class Meta:
-        model = Recipe
-        fields = ('id', 'name', 'image', 'cooking_time')
+    def get_is_subscribed(self, obj):
+        """Проверка подписки на пользователя."""
+        request = self.context.get('request')
+        if request and request.user.is_authenticated:
+            return Subscription.objects.filter(
+                user=request.user,
+                author=obj
+            ).exists()
+        return False
 
 
 class SetPasswordSerializer(serializers.Serializer):
