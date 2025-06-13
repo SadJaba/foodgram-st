@@ -143,6 +143,13 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
             'name', 'text', 'cooking_time'
         )
 
+    def validate_image(self, value):
+        if not value:
+            raise serializers.ValidationError(
+                'Поле image обязательно для заполнения'
+            )
+        return value
+
     def validate_ingredients(self, value):
         if not value:
             raise serializers.ValidationError(
@@ -205,6 +212,23 @@ class RecipeCreateSerializer(serializers.ModelSerializer):
         return RecipeSerializer(instance, context=self.context).data
 
 
+class RecipeUpdateSerializer(RecipeCreateSerializer):
+    """Сериализатор обновления рецепта."""
+    class Meta:
+        model = Recipe
+        fields = (
+            'ingredients', 'image',
+            'name', 'text', 'cooking_time'
+        )
+        extra_kwargs = {
+            'ingredients': {'required': True},
+            'image': {'required': True},
+            'name': {'required': True},
+            'text': {'required': True},
+            'cooking_time': {'required': True}
+        }
+
+
 class RecipeMinifiedSerializer(serializers.ModelSerializer):
     """Сериализатор для минифицированного представления рецепта."""
     class Meta:
@@ -222,8 +246,8 @@ class SubscriptionSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             'id', 'username', 'first_name', 'last_name',
-            'email', 'is_subscribed', 'recipes', 'recipes_count',
-            'avatar'
+            'email', 'is_subscribed', 'avatar', 'recipes_count',
+            'recipes'
         )
 
     def get_recipes(self, obj):
@@ -318,6 +342,10 @@ class RecipeGetShortLinkSerializer(serializers.ModelSerializer):
 
     def get_short_link(self, obj):
         return f"http://foodgram.example.org/s/{obj.id}"
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        return {'short-link': data['short_link']}
 
 
 class BaseUserRecipeSerializer(serializers.ModelSerializer):

@@ -25,7 +25,7 @@ from .serializers import (
     TokenCreateSerializer, TokenGetResponseSerializer,
     SetAvatarSerializer, SetAvatarResponseSerializer,
     RecipeGetShortLinkSerializer, FavoriteSerializer,
-    ShoppingCartSerializer
+    ShoppingCartSerializer, RecipeUpdateSerializer
 )
 from .filters import RecipeFilter
 from .pagination import CustomPageNumberPagination
@@ -164,7 +164,14 @@ class IngredientViewSet(viewsets.ReadOnlyModelViewSet):
     permission_classes = (AllowAny,)
     filter_backends = (SearchFilter,)
     search_fields = ('^name',)
-    pagination_class = None  # Отключаем пагинацию для ингредиентов
+    pagination_class = None
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        name = self.request.query_params.get('name')
+        if name:
+            return queryset.filter(name__istartswith=name)
+        return queryset
 
 
 class RecipeViewSet(viewsets.ModelViewSet):
@@ -175,8 +182,10 @@ class RecipeViewSet(viewsets.ModelViewSet):
     pagination_class = CustomPageNumberPagination
 
     def get_serializer_class(self):
-        if self.request.method not in SAFE_METHODS:
+        if self.request.method in ['POST']:
             return RecipeCreateSerializer
+        if self.request.method in ['PATCH', 'PUT']:
+            return RecipeUpdateSerializer
         return RecipeSerializer
 
     def perform_create(self, serializer):
