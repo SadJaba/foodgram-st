@@ -100,7 +100,6 @@ class CustomUserViewSet(UserViewSet):
             Subscription.objects.create(user=user, author=author)
             serializer = SubscriptionSerializer(author, context={'request': request})
             return Response(serializer.data, status=status.HTTP_201_CREATED)
-        # DELETE
         subscription = Subscription.objects.filter(user=user, author=author)
         if not subscription.exists():
             raise ValidationError({'detail': 'Вы не были подписаны на этого пользователя'})
@@ -337,5 +336,8 @@ class RecipeViewSet(viewsets.ModelViewSet):
     def get_link(self, request, pk=None):
         """Получение короткой ссылки на рецепт."""
         recipe = get_object_or_404(Recipe, id=pk)
-        serializer = RecipeGetShortLinkSerializer(recipe)
+        serializer = RecipeGetShortLinkSerializer(
+            recipe,
+            context={'request': request}
+        )
         return Response(serializer.data)
